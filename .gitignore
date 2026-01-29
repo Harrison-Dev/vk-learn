@@ -1,0 +1,25 @@
+# Build output
+app
+*.o
+*.a
+
+# Compiled shaders
+shaders/*.spv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Debug
+*.dSYM/
+
+# Claude Code
+.claude/
