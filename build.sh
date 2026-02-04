@@ -10,9 +10,18 @@ if [ -f "shaders/shader.vert" ] && [ -f "shaders/shader.frag" ]; then
     "$VULKAN_SDK/bin/glslc" shaders/shader.frag -o shaders/frag.spv
 fi
 
+# Check for debug flag
+if [ "$1" = "debug" ]; then
+    echo "Compiling in DEBUG mode..."
+    CFLAGS="-std=c++17 -g -O0"
+else
+    echo "Compiling in RELEASE mode..."
+    CFLAGS="-std=c++17 -O2 -DNDEBUG"
+fi
+
 # Compile C++ source files
 echo "Compiling source files..."
-clang++ -std=c++17 -O2 \
+clang++ $CFLAGS \
     -I"$VULKAN_SDK/include" \
     -I/opt/homebrew/include \
     -Isrc \
