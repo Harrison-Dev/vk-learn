@@ -30,7 +30,9 @@ private:
     VkInstance instance;
     VkDevice device;
     VkDebugUtilsMessengerEXT debugMessenger;
+    VkQueue graphicsQueue;
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+    VkSurfaceKHR surface;
 
     struct QueueFamilyIndices
     {
