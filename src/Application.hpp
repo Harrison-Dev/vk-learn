@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <vector>
 #include <map>
+#include <set>
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -31,16 +32,18 @@ private:
     VkDevice device;
     VkDebugUtilsMessengerEXT debugMessenger;
     VkQueue graphicsQueue;
+    VkQueue presentQueue;
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkSurfaceKHR surface;
 
     struct QueueFamilyIndices
     {
         std::optional<uint32_t> graphicsFamily;
+        std::optional<uint32_t> presentFamily;
 
         bool isComplete()
         {
-            return graphicsFamily.has_value();
+            return graphicsFamily.has_value() && presentFamily.has_value();
         }
     };
 
@@ -52,6 +55,7 @@ private:
     void cleanup();
     void createInstance();
     bool checkValidationSupport();
+    void createSurface();
     void pickPhysicalDevice();
     void createLogicalDevice();
     bool isDeviceSuitable(VkPhysicalDevice device);

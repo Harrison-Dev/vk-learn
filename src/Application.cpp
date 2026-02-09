@@ -3,6 +3,11 @@
 #include <iostream>
 #include <vulkan/vk_enum_string_helper.h>
 
+// Forward declarations
+void DestroyDebugUtilsMessengerEXT(VkInstance instance,
+                                   VkDebugUtilsMessengerEXT debugMessenger,
+                                   const VkAllocationCallbacks *pAllocator);
+
 // #region Application Lifecycle
 
 void HelloTriangleApplication::run()
@@ -27,6 +32,7 @@ void HelloTriangleApplication::initVulkan()
 {
     createInstance();
     setupDebugMessenger();
+    createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
 }
@@ -47,6 +53,8 @@ void HelloTriangleApplication::cleanup()
     {
         DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
     }
+
+    vkDestroySurfaceKHR(instance, surface, nullptr);
 
     vkDestroyInstance(instance, nullptr);
 
@@ -158,6 +166,14 @@ std::vector<const char *> HelloTriangleApplication::getRequiredExtensions()
     }
 
     return extensions;
+}
+
+void HelloTriangleApplication::createSurface()
+{
+    if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create window surface!");
+    }
 }
 
 // #endregion
@@ -287,6 +303,13 @@ HelloTriangleApplication::QueueFamilyIndices HelloTriangleApplication::findQueue
             indices.graphicsFamily = i;
         }
 
+        VkBool32 presentSupport = false;
+        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+        if (presentSupport)
+        {
+            indices.presentFamily = i;
+        }
+
         i++;
     }
 
@@ -299,24 +322,46 @@ HelloTriangleApplication::QueueFamilyIndices HelloTriangleApplication::findQueue
 
 void HelloTriangleApplication::createLogicalDevice()
 {
+    // ======== 第一步：查詢這個 GPU 有哪些佇列家族 ========
+    // 找出 graphicsFamily（能畫圖的）和 presentFamily（能送到螢幕的）的索引號碼
     QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
 
-    VkDeviceQueueCreateInfo queueCreateInfo{};
-    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
-    queueCreateInfo.queueCount = 1;
+    // ======== 第二步：準備要建立哪些佇列 ========
+    // 用 set 去重複：如果 graphics 和 present 是同一個佇列家族（很常見），
+    // 就只需要建立一個佇列，不需要重複建立
+    std::set<uint32_t> uniqueQueueFamilies = {
+        indices.graphicsFamily.value(), // 例如：0
+        indices.presentFamily.value()}; // 例如：0（可能跟上面一樣）
+    // 如果兩個都是 0，set 裡只會有 {0}
 
-    float queuePriority = 1.0f;
-    queueCreateInfo.pQueuePriorities = &queuePriority;
+    // 為每個不重複的佇列家族，建立一個「佇列建立請求」
+    std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+    float queuePriority = 1.0f; // 優先權 0.0~1.0，只有一個佇列所以無所謂
+    for (uint32_t queueFamily : uniqueQueueFamilies)
+    {
+        VkDeviceQueueCreateInfo queueCreateInfo{};
+        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfo.queueFamilyIndex = queueFamily; // 這個佇列屬於第幾個家族
+        queueCreateInfo.queueCount = 1;                 // 這個家族要幾個佇列
+        queueCreateInfo.pQueuePriorities = &queuePriority;
+        queueCreateInfos.push_back(queueCreateInfo);
+    }
 
+    // ======== 第三步：指定需要的 GPU 功能 ========
+    // 目前不需要任何特殊功能（如幾何著色器），所以全部留空
     VkPhysicalDeviceFeatures deviceFeatures{};
 
+    // ======== 第四步：填寫「建立邏輯裝置」的申請表 ========
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    createInfo.pQueueCreateInfos = &queueCreateInfo;
-    createInfo.queueCreateInfoCount = 1;
+    // 把上面準備好的佇列請求塞進來
+    createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+    createInfo.pQueueCreateInfos = queueCreateInfos.data();
+    // 把需要的功能塞進來
     createInfo.pEnabledFeatures = &deviceFeatures;
+    // 目前不需要裝置擴展（之後 swap chain 會需要）
     createInfo.enabledExtensionCount = 0;
+    // Validation layer（新版 Vulkan 其實會忽略這個，但為了相容性還是加上）
     if (enableValidationLayer)
     {
         createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
@@ -327,10 +372,17 @@ void HelloTriangleApplication::createLogicalDevice()
         createInfo.enabledLayerCount = 0;
     }
 
+    // ======== 第五步：真正建立邏輯裝置 ========
     if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS)
     {
         throw std::runtime_error("failed to create logical device!");
     }
+
+    // ======== 第六步：從建好的裝置中取得佇列的 handle ========
+    // 佇列是跟著裝置一起建立的，我們只是取回它的 handle 來用
+    // 參數：裝置, 佇列家族索引, 該家族中第幾個佇列(0=第一個), 存放handle的指標
+    vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
+    vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
 }
 
 // #endregion
