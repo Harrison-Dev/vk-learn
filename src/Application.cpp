@@ -41,6 +41,8 @@ void HelloTriangleApplication::initVulkan()
     createRenderPass();
     createGraphicsPipeline();
     createFramebuffers();
+    createCommandPool();
+    createCommandBuffers();
 }
 
 void HelloTriangleApplication::mainLoop()
@@ -53,6 +55,8 @@ void HelloTriangleApplication::mainLoop()
 
 void HelloTriangleApplication::cleanup()
 {
+    vkDestroyCommandPool(device, commandPool, nullptr);
+
     for (auto fb : swapChainFramebuffers)
     {
         vkDestroyFramebuffer(device, fb, nullptr);
@@ -546,6 +550,37 @@ void HelloTriangleApplication::createFramebuffers()
     }
 }
 
+void HelloTriangleApplication::createCommandPool()
+{
+    QueueFamilyIndices queueFamilyIndices = findQueueFamilies(physicalDevice);
+
+    VkCommandPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+
+    if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create command pool!");
+    }
+}
+
+void HelloTriangleApplication::createCommandBuffers()
+{
+    // 每個 framebuffer 需要一個對應的 command buffer
+    commandBuffers.resize(swapChainFramebuffers.size());
+
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = commandPool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
+
+    if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to allocate command buffers!");
+    }
+}
 #pragma endregion
 
 // #region Debug Messenger

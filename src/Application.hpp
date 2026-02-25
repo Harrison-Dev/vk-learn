@@ -49,6 +49,8 @@ private:
     // Pipeline
     VkPipelineLayout pipelineLayout;
     VkPipeline graphicsPipeline;
+    VkCommandPool commandPool;
+    std::vector<VkCommandBuffer> commandBuffers;
 
     struct QueueFamilyIndices
     {
@@ -83,6 +85,8 @@ private:
     void createImageViews();
     void createRenderPass();
     void createFramebuffers();
+    void createCommandPool();
+    void createCommandBuffers();
     void createGraphicsPipeline();
     VkShaderModule createShaderModule(const std::vector<char> &code);
     bool isDeviceSuitable(VkPhysicalDevice device);
