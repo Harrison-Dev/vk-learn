@@ -45,6 +45,9 @@ private:
     VkExtent2D swapChainExtent;           // 記住選的解析度
     std::vector<VkImageView> swapChainImageViews;
     VkRenderPass renderPass;
+    // Pipeline
+    VkPipelineLayout pipelineLayout;
+    VkPipeline graphicsPipeline;
 
     struct QueueFamilyIndices
     {
@@ -78,6 +81,8 @@ private:
     void createSwapChain();
     void createImageViews();
     void createRenderPass();
+    void createGraphicsPipeline();
+    VkShaderModule createShaderModule(const std::vector<char> &code);
     bool isDeviceSuitable(VkPhysicalDevice device);
     bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 
