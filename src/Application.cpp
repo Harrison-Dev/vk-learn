@@ -37,6 +37,7 @@ void HelloTriangleApplication::initVulkan()
     createLogicalDevice();
     createSwapChain();
     createImageViews();
+    createRenderPass();
 }
 
 void HelloTriangleApplication::mainLoop()
@@ -49,6 +50,8 @@ void HelloTriangleApplication::mainLoop()
 
 void HelloTriangleApplication::cleanup()
 {
+    vkDestroyRenderPass(device, renderPass, nullptr);
+
     for (auto imageView : swapChainImageViews)
     {
         vkDestroyImageView(device, imageView, nullptr);
@@ -291,6 +294,59 @@ void HelloTriangleApplication::createImageViews()
     }
 }
 
+void HelloTriangleApplication::createRenderPass()
+{
+    // Attachment = 渲染時用到的圖片（這裡是 swap chain 的圖片）
+    VkAttachmentDescription colorAttachment{};
+    colorAttachment.format = swapChainImageFormat;
+    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT; // 不做 MSAA，只用 1 個 sample
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    // ======== 第二步：Subpass 的 Attachment Reference ========
+    VkAttachmentReference colorAttachmentRef{};
+    colorAttachmentRef.attachment = 0; // 第 0 個 attachment（就是上面那個）
+    colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    // ======== 第三步：定義 Subpass ========
+    VkSubpassDescription subpass{};
+    // GRAPHICS = 這是圖形渲染的 subpass（也可以是 compute）
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colorAttachmentRef;
+    // ======== 第四步：Subpass Dependency ========
+    // 告訴 Vulkan：這個 subpass 要等什麼條件才能開始
+    // 確保 swap chain image 在進入 render pass 之前已經準備好
+    VkSubpassDependency dependency{};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+
+    // 要等 swap chain 完成「COLOR_ATTACHMENT_OUTPUT」這個階段
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcAccessMask = 0;
+
+    // 我們的 subpass 要在「COLOR_ATTACHMENT_OUTPUT」階段，
+    // 並且需要「寫入」的存取權限
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    // ======== 第五步：建立 Render Pass ========
+    VkRenderPassCreateInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 1;
+    renderPassInfo.pAttachments = &colorAttachment;
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+    renderPassInfo.dependencyCount = 1;
+    renderPassInfo.pDependencies = &dependency;
+
+    if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create render pass!");
+    }
+}
 #pragma endregion
 
 // #region Debug Messenger
