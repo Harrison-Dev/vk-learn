@@ -43,6 +43,7 @@ private:
     std::vector<VkImage> swapChainImages; // swap chain 裡的圖片 handles
     VkFormat swapChainImageFormat;        // 記住選的格式
     VkExtent2D swapChainExtent;           // 記住選的解析度
+    std::vector<VkImageView> swapChainImageViews;
 
     struct QueueFamilyIndices
     {
@@ -74,6 +75,7 @@ private:
     void pickPhysicalDevice();
     void createLogicalDevice();
     void createSwapChain();
+    void createImageViews();
     bool isDeviceSuitable(VkPhysicalDevice device);
     bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 
