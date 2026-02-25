@@ -40,6 +40,7 @@ void HelloTriangleApplication::initVulkan()
     createImageViews();
     createRenderPass();
     createGraphicsPipeline();
+    createFramebuffers();
 }
 
 void HelloTriangleApplication::mainLoop()
@@ -52,6 +53,11 @@ void HelloTriangleApplication::mainLoop()
 
 void HelloTriangleApplication::cleanup()
 {
+    for (auto fb : swapChainFramebuffers)
+    {
+        vkDestroyFramebuffer(device, fb, nullptr);
+    }
+
     vkDestroyPipeline(device, graphicsPipeline, nullptr);
     vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
     vkDestroyRenderPass(device, renderPass, nullptr);
@@ -514,6 +520,32 @@ void HelloTriangleApplication::createGraphicsPipeline()
     vkDestroyShaderModule(device, fragShaderModule, nullptr);
     vkDestroyShaderModule(device, vertShaderModule, nullptr);
 }
+
+void HelloTriangleApplication::createFramebuffers()
+{
+    swapChainFramebuffers.resize(swapChainImageViews.size());
+    for (size_t i = 0; i < swapChainImageViews.size(); i++)
+    {
+        VkImageView attachments[] = {
+            swapChainImageViews[i] // attachment 0 = color attachment
+        };
+
+        VkFramebufferCreateInfo framebufferInfo{};
+        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferInfo.renderPass = renderPass; // 要相容哪個 render pass
+        framebufferInfo.attachmentCount = 1;
+        framebufferInfo.pAttachments = attachments; // 綁定實際的 image view
+        framebufferInfo.width = swapChainExtent.width;
+        framebufferInfo.height = swapChainExtent.height;
+        framebufferInfo.layers = 1; // 非 VR 永遠是 1
+
+        if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create framebuffer!");
+        }
+    }
+}
+
 #pragma endregion
 
 // #region Debug Messenger

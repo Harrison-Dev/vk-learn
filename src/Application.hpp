@@ -44,6 +44,7 @@ private:
     VkFormat swapChainImageFormat;        // 記住選的格式
     VkExtent2D swapChainExtent;           // 記住選的解析度
     std::vector<VkImageView> swapChainImageViews;
+    std::vector<VkFramebuffer> swapChainFramebuffers;
     VkRenderPass renderPass;
     // Pipeline
     VkPipelineLayout pipelineLayout;
@@ -81,6 +82,7 @@ private:
     void createSwapChain();
     void createImageViews();
     void createRenderPass();
+    void createFramebuffers();
     void createGraphicsPipeline();
     VkShaderModule createShaderModule(const std::vector<char> &code);
     bool isDeviceSuitable(VkPhysicalDevice device);
