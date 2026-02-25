@@ -43,6 +43,7 @@ void HelloTriangleApplication::initVulkan()
     createFramebuffers();
     createCommandPool();
     createCommandBuffers();
+    createSyncObjects();
 }
 
 void HelloTriangleApplication::mainLoop()
@@ -50,11 +51,19 @@ void HelloTriangleApplication::mainLoop()
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
+        drawFrame();
     }
+
+    // 等 GPU 把所有工作做完再 cleanup，避免還在用的資源被銷毀
+    vkDeviceWaitIdle(device);
 }
 
 void HelloTriangleApplication::cleanup()
 {
+    vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
+    vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
+    vkDestroyFence(device, inFlightFence, nullptr);
+
     vkDestroyCommandPool(device, commandPool, nullptr);
 
     for (auto fb : swapChainFramebuffers)
@@ -581,6 +590,127 @@ void HelloTriangleApplication::createCommandBuffers()
         throw std::runtime_error("failed to allocate command buffers!");
     }
 }
+void HelloTriangleApplication::createSyncObjects()
+{
+    VkSemaphoreCreateInfo semaphoreInfo{};
+    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    VkFenceCreateInfo fenceInfo{};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphore) != VK_SUCCESS ||
+        vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphore) != VK_SUCCESS ||
+        vkCreateFence(device, &fenceInfo, nullptr, &inFlightFence) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create sync objects!");
+    }
+}
+
+void HelloTriangleApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+{
+    // ======== 開始錄製 ========
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = 0;
+    beginInfo.pInheritanceInfo = nullptr;
+
+    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to begin recording command buffer!");
+    }
+
+    // ======== 開始 Render Pass ========
+    VkRenderPassBeginInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = renderPass;
+    renderPassInfo.framebuffer = swapChainFramebuffers[imageIndex]; // 畫到哪個 framebuffer
+    renderPassInfo.renderArea.offset = {0, 0};
+    renderPassInfo.renderArea.extent = swapChainExtent;
+
+    // clear 的顏色（黑色背景）
+    VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+    renderPassInfo.clearValueCount = 1;
+    renderPassInfo.pClearValues = &clearColor;
+
+    // INLINE = 指令直接錄在 primary command buffer（不用 secondary）
+    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    // ======== 綁定 Graphics Pipeline ========
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+
+    // ======== 畫三角形！========
+    // 參數：commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
+    // ======== 結束 Render Pass ========
+    vkCmdEndRenderPass(commandBuffer);
+
+    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to record command buffer!");
+    }
+}
+
+void HelloTriangleApplication::drawFrame()
+{
+    // ======== 1. 等上一幀完成 ========
+    // inFlightFence 代表「GPU 是否已完成上一幀」
+    // 等到 fence 變成 signaled（完成）才繼續
+    vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+    vkResetFences(device, 1, &inFlightFence); // 重設為 unsignaled，準備下一幀
+
+    // ======== 2. 從 swap chain 取得下一張可用圖片 ========
+    uint32_t imageIndex;
+    vkAcquireNextImageKHR(device, swapChain, UINT64_MAX,
+                          imageAvailableSemaphore, // 圖片準備好後發訊號
+                          VK_NULL_HANDLE, &imageIndex);
+
+    // ======== 3. 錄製指令 ========
+    vkResetCommandBuffer(commandBuffers[imageIndex], 0);
+    recordCommandBuffer(commandBuffers[imageIndex], imageIndex);
+
+    // ======== 4. 提交指令給 GPU ========
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+    // 等 imageAvailableSemaphore 發訊號後，才執行 COLOR_ATTACHMENT_OUTPUT 階段
+    VkSemaphore waitSemaphores[] = {imageAvailableSemaphore};
+    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffers[imageIndex];
+
+    // 渲染完成後發 renderFinishedSemaphore 訊號
+    VkSemaphore signalSemaphores[] = {renderFinishedSemaphore};
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = signalSemaphores;
+
+    // inFlightFence：GPU 完成後發訊號給 CPU
+    if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFence) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to submit draw command buffer!");
+    }
+
+    // ======== 5. 把結果呈現到螢幕 ========
+    VkPresentInfoKHR presentInfo{};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
+    // 等 renderFinishedSemaphore 後才顯示
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = signalSemaphores;
+
+    VkSwapchainKHR swapChains[] = {swapChain};
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = swapChains;
+    presentInfo.pImageIndices = &imageIndex;
+
+    vkQueuePresentKHR(presentQueue, &presentInfo);
+}
+
 #pragma endregion
 
 // #region Debug Messenger

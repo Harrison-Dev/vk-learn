@@ -52,6 +52,10 @@ private:
     VkCommandPool commandPool;
     std::vector<VkCommandBuffer> commandBuffers;
 
+    VkSemaphore imageAvailableSemaphore;
+    VkSemaphore renderFinishedSemaphore;
+    VkFence inFlightFence;
+
     struct QueueFamilyIndices
     {
         std::optional<uint32_t> graphicsFamily;
@@ -87,6 +91,9 @@ private:
     void createFramebuffers();
     void createCommandPool();
     void createCommandBuffers();
+    void createSyncObjects();
+    void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void drawFrame();
     void createGraphicsPipeline();
     VkShaderModule createShaderModule(const std::vector<char> &code);
     bool isDeviceSuitable(VkPhysicalDevice device);
