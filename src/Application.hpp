@@ -8,6 +8,8 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <algorithm>
+#include <limits>
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -36,6 +38,12 @@ private:
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkSurfaceKHR surface;
 
+    // Swap Chain
+    VkSwapchainKHR swapChain;
+    std::vector<VkImage> swapChainImages; // swap chain 裡的圖片 handles
+    VkFormat swapChainImageFormat;        // 記住選的格式
+    VkExtent2D swapChainExtent;           // 記住選的解析度
+
     struct QueueFamilyIndices
     {
         std::optional<uint32_t> graphicsFamily;
@@ -45,6 +53,13 @@ private:
         {
             return graphicsFamily.has_value() && presentFamily.has_value();
         }
+    };
+
+    struct SwapChainSupportDetails
+    {
+        VkSurfaceCapabilitiesKHR capabilities;
+        std::vector<VkSurfaceFormatKHR> formats;
+        std::vector<VkPresentModeKHR> presentModes;
     };
 
     void initWindow();
@@ -58,9 +73,19 @@ private:
     void createSurface();
     void pickPhysicalDevice();
     void createLogicalDevice();
+    void createSwapChain();
     bool isDeviceSuitable(VkPhysicalDevice device);
-    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+    bool checkDeviceExtensionSupport(VkPhysicalDevice device);
+
+    QueueFamilyIndices
+    findQueueFamilies(VkPhysicalDevice device);
+    SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
+    VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats);
+    VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentModes);
+    VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
     std::vector<const char *> getRequiredExtensions();
+    const std::vector<const char *> deviceExtensions = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
         VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
