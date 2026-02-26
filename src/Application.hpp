@@ -57,6 +57,7 @@ private:
     std::vector<VkSemaphore> renderFinishedSemaphores;
     std::vector<VkFence> inFlightFences;
     uint32_t currentFrame = 0;
+    bool framebufferResized = false;
 
     struct QueueFamilyIndices
     {
@@ -96,6 +97,9 @@ private:
     void createSyncObjects();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     void drawFrame();
+    void cleanupSwapChain();
+    void recreateSwapChain();
+    static void framebufferResizeCallback(GLFWwindow *window, int width, int height);
     void createGraphicsPipeline();
     VkShaderModule createShaderModule(const std::vector<char> &code);
     bool isDeviceSuitable(VkPhysicalDevice device);

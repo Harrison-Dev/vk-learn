@@ -24,9 +24,38 @@ void HelloTriangleApplication::initWindow()
     glfwInit();
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
     window = glfwCreateWindow(WIDTH, HEIGHT, "App", nullptr, nullptr);
+    glfwSetWindowUserPointer(window, this);
+    glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+}
+
+void HelloTriangleApplication::recreateSwapChain()
+{
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(window, &width, &height);
+    while (width == 0 || height == 0)
+    {
+        glfwGetFramebufferSize(window, &width, &height);
+        glfwWaitEvents();
+    }
+
+    vkDeviceWaitIdle(device);
+
+    cleanupSwapChain();
+
+    createSwapChain();
+    createImageViews();
+    createRenderPass();       // ← 新增
+    createGraphicsPipeline(); // ← 新增
+    createFramebuffers();
+}
+
+void HelloTriangleApplication::framebufferResizeCallback(GLFWwindow *window, int width, int height)
+{
+    auto app = reinterpret_cast<HelloTriangleApplication *>(glfwGetWindowUserPointer(window));
+    app->framebufferResized = true;
 }
 
 void HelloTriangleApplication::initVulkan()
@@ -58,8 +87,30 @@ void HelloTriangleApplication::mainLoop()
     vkDeviceWaitIdle(device);
 }
 
+void HelloTriangleApplication::cleanupSwapChain()
+{
+    for (auto framebuffer : swapChainFramebuffers)
+    {
+        vkDestroyFramebuffer(device, framebuffer, nullptr);
+    }
+
+    for (auto imageView : swapChainImageViews)
+    {
+        vkDestroyImageView(device, imageView, nullptr);
+    }
+
+    vkDestroySwapchainKHR(device, swapChain, nullptr);
+
+    // 方案 B：pipeline 也要一起清掉，因為 viewport/scissor 寫死在裡面
+    vkDestroyPipeline(device, graphicsPipeline, nullptr);
+    vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+    vkDestroyRenderPass(device, renderPass, nullptr);
+}
+
 void HelloTriangleApplication::cleanup()
 {
+    cleanupSwapChain(); // ← 取代原本分散的三段銷毀
+
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
         vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
@@ -69,20 +120,7 @@ void HelloTriangleApplication::cleanup()
 
     vkDestroyCommandPool(device, commandPool, nullptr);
 
-    for (auto fb : swapChainFramebuffers)
-    {
-        vkDestroyFramebuffer(device, fb, nullptr);
-    }
-
-    vkDestroyPipeline(device, graphicsPipeline, nullptr);
-    vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-    vkDestroyRenderPass(device, renderPass, nullptr);
-
-    for (auto imageView : swapChainImageViews)
-        vkDestroyImageView(device, imageView, nullptr);
-
-    vkDestroySwapchainKHR(device, swapChain, nullptr);
-    vkDestroyDevice(device, nullptr); // device 先銷毀
+    vkDestroyDevice(device, nullptr);
 
     if (enableValidationLayer)
         DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
@@ -667,31 +705,40 @@ void HelloTriangleApplication::recordCommandBuffer(VkCommandBuffer commandBuffer
 
 void HelloTriangleApplication::drawFrame()
 {
-    // ======== 1. 等上一幀完成 ========
-    // inFlightFence 代表「GPU 是否已完成上一幀」
-    // 等到 fence 變成 signaled（完成）才繼續
     vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+
+    // ======== 取得下一張圖片 ========
+    uint32_t imageIndex;
+    VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX,
+                                            imageAvailableSemaphores[currentFrame],
+                                            VK_NULL_HANDLE, &imageIndex);
+
+    // swap chain 過期了（視窗大小改變等）→ 立刻重建
+    if (result == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        recreateSwapChain();
+        return; // 這幀不畫了，下一幀再來
+    }
+    else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+    {
+        throw std::runtime_error("failed to acquire swap chain image!");
+    }
+
+    // ★ 重要：resetFences 移到這裡，確認這幀確實要畫才 reset
+    //   如果提前 return 了（重建 swap chain），fence 不會被 reset，
+    //   下一幀 waitForFences 就不會永遠卡住
     vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
-    // ======== 2. 從 swap chain 取得下一張可用圖片 ========
-    uint32_t imageIndex;
-    vkAcquireNextImageKHR(device, swapChain, UINT64_MAX,
-                          imageAvailableSemaphores[currentFrame],
-                          VK_NULL_HANDLE, &imageIndex);
-
-    // ======== 3. 錄製指令 ========
+    // ======== 錄製 & 提交 ========
     vkResetCommandBuffer(commandBuffers[currentFrame], 0);
     recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
 
-    // ======== 4. 提交指令給 GPU ========
     VkSemaphore waitSemaphores[] = {imageAvailableSemaphores[currentFrame]};
     VkSemaphore signalSemaphores[] = {renderFinishedSemaphores[currentFrame]};
     VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-    // 等 imageAvailableSemaphore 發訊號後，才執行 COLOR_ATTACHMENT_OUTPUT 階段
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = waitSemaphores;
     submitInfo.pWaitDstStageMask = waitStages;
@@ -700,16 +747,14 @@ void HelloTriangleApplication::drawFrame()
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
 
-    // inFlightFence：GPU 完成後發訊號給 CPU
     if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS)
     {
         throw std::runtime_error("failed to submit draw command buffer!");
     }
 
-    // ======== 5. 把結果呈現到螢幕 ========
+    // ======== Present ========
     VkSwapchainKHR swapChains[] = {swapChain};
     VkPresentInfoKHR presentInfo{};
-
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     presentInfo.waitSemaphoreCount = 1;
     presentInfo.pWaitSemaphores = signalSemaphores;
@@ -717,7 +762,19 @@ void HelloTriangleApplication::drawFrame()
     presentInfo.pSwapchains = swapChains;
     presentInfo.pImageIndices = &imageIndex;
 
-    vkQueuePresentKHR(presentQueue, &presentInfo);
+    result = vkQueuePresentKHR(presentQueue, &presentInfo);
+
+    // present 也要檢查：過期或次佳都重建
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized)
+    {
+        framebufferResized = false;
+        recreateSwapChain();
+    }
+    else if (result != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to present swap chain image!");
+    }
+
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
