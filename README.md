@@ -6,7 +6,7 @@
 
 - **平台：** macOS (Apple Silicon)
 - **Vulkan 實作：** MoltenVK（Vulkan-to-Metal 轉譯層）
-- **Vulkan SDK：** 1.4.335.1
+- **Vulkan SDK：** LunarG Vulkan SDK（建議最新版本）
 - **Shader 語言：** HLSL（透過 DXC 編譯為 SPIR-V）
 - **編譯器：** clang++ (C++17)
 - **視窗管理：** GLFW 3.4
@@ -43,9 +43,21 @@ cd shaders && ./compile.sh
 
 ### 依賴
 
-- [Vulkan SDK](https://vulkan.lunarg.com/) (安裝至 `$HOME/VulkanSDK/`)
+- [LunarG Vulkan SDK](https://vulkan.lunarg.com/)（macOS）
 - [GLFW](https://www.glfw.org/) — `brew install glfw`
 - [GLM](https://github.com/g-truc/glm) — `brew install glm`
+
+安裝完 SDK 後，請確認 `dxc` 可用：
+
+```bash
+which dxc
+```
+
+`build.sh` 與 `run.sh` 會自動抓 `$HOME/VulkanSDK` 底下最新版本的 `macOS` SDK 目錄；若你要手動指定，可在執行前設定：
+
+```bash
+export VULKAN_SDK="$HOME/VulkanSDK/<version>/macOS"
+```
 
 ### 建置
 

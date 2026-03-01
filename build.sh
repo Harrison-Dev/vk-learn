@@ -1,7 +1,14 @@
 #!/bin/bash
 
-# Vulkan SDK path
-VULKAN_SDK="$HOME/VulkanSDK/1.4.335.1/macOS"
+# Vulkan SDK path (override with env: VULKAN_SDK=/path/to/.../macOS)
+if [ -z "$VULKAN_SDK" ]; then
+    VULKAN_SDK="$(ls -d "$HOME"/VulkanSDK/*/macOS 2>/dev/null | sort -V | tail -n 1)"
+fi
+
+if [ -z "$VULKAN_SDK" ] || [ ! -d "$VULKAN_SDK" ]; then
+    echo "VULKAN_SDK not found. Please install LunarG Vulkan SDK."
+    exit 1
+fi
 
 # Compile shaders if they exist
 if [ -f "shaders/shader.vert" ] && [ -f "shaders/shader.frag" ]; then
