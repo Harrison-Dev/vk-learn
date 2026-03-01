@@ -10,11 +10,12 @@ if [ -z "$VULKAN_SDK" ] || [ ! -d "$VULKAN_SDK" ]; then
     exit 1
 fi
 
-# Compile shaders if they exist
-if [ -f "shaders/shader.vert" ] && [ -f "shaders/shader.frag" ]; then
-    echo "Compiling shaders..."
-    "$VULKAN_SDK/bin/glslc" shaders/shader.vert -o shaders/vert.spv
-    "$VULKAN_SDK/bin/glslc" shaders/shader.frag -o shaders/frag.spv
+# Compile shaders
+if [ -x "shaders/compile.sh" ]; then
+    ./shaders/compile.sh
+else
+    echo "shaders/compile.sh not found or not executable"
+    exit 1
 fi
 
 # Check for debug flag
