@@ -1,10 +1,19 @@
 # Build output
 app
+app.exe
+glfw3.dll
 *.o
 *.a
+*.obj
+*.lib
+*.pdb
+*.ilk
 
 # Compiled shaders
 shaders/*.spv
+
+# Windows shell artifacts
+nul
 
 # IDE
 .vscode/

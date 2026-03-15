@@ -4,7 +4,7 @@
 
 ## 環境
 
-- **平台：** macOS (Apple Silicon)
+- **主要開發平台：** macOS (Apple Silicon)
 - **Vulkan 實作：** MoltenVK（Vulkan-to-Metal 轉譯層）
 - **Vulkan SDK：** LunarG Vulkan SDK（建議最新版本）
 - **Shader 語言：** HLSL（透過 DXC 編譯為 SPIR-V）
@@ -16,8 +16,7 @@
 
 由於 macOS 不原生支援 Vulkan，需要透過 MoltenVK 轉譯至 Metal，因此有以下額外處理：
 
-- 啟用 `VK_KHR_PORTABILITY_ENUMERATION` 擴展與 `VK_KHR_portability_subset` 裝置擴展
-- Instance 建立時加上 `VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR` flag
+- 若系統支援 `VK_KHR_PORTABILITY_ENUMERATION`，程式會自動啟用 portability extension 與對應 flag
 - 執行時需設定 `VK_ICD_FILENAMES`、`VK_LAYER_PATH`、`DYLD_LIBRARY_PATH` 等環境變數（見 `run.sh`）
 - Swap extent 處理 Retina 螢幕的 DPI 縮放
 
@@ -39,40 +38,66 @@ dxc -spirv -T ps_6_0 -E main shader.frag.hlsl -Fo frag.spv
 cd shaders && ./compile.sh
 ```
 
-## 建置與執行
+## 建置與執行（跨平台一致）
 
-### 依賴
+兩個平台都用 clang++，而且都提供同名入口：
 
-- [LunarG Vulkan SDK](https://vulkan.lunarg.com/)（macOS）
-- [GLFW](https://www.glfw.org/) — `brew install glfw`
-- [GLM](https://github.com/g-truc/glm) — `brew install glm`
+- macOS: `./run.sh`
+- Windows: `.\run.bat`
 
-安裝完 SDK 後，請確認 `dxc` 可用：
+兩個入口都會做同一件事：
+
+1. 編譯 HLSL shader（DXC -> SPIR-V）
+2. 編譯 C++ 程式（clang++）
+3. 啟動程式
+
+支援參數（兩平台一致）：
+
+- `debug`: Debug build
+- `norun`: 只建置不啟動
+
+範例：
 
 ```bash
-which dxc
+./run.sh debug
+./run.sh norun
 ```
 
-`build.sh` 與 `run.sh` 會自動抓 `$HOME/VulkanSDK` 底下最新版本的 `macOS` SDK 目錄；若你要手動指定，可在執行前設定：
+```powershell
+.\run.bat debug
+.\run.bat norun
+```
+
+### macOS 依賴
+
+- [LunarG Vulkan SDK](https://vulkan.lunarg.com/)（MoltenVK）
+- [GLFW](https://www.glfw.org/)：`brew install glfw`
+- [GLM](https://github.com/g-truc/glm)：`brew install glm`
+- clang++（Xcode Command Line Tools）
+- dxc（隨 Vulkan SDK）
+
+### Windows 依賴
+
+- [LunarG Vulkan SDK for Windows](https://vulkan.lunarg.com/)
+- LLVM clang++（建議安裝 LLVM）
+- vcpkg 安裝 GLFW：`C:\vcpkg\vcpkg.exe install glfw3:x64-windows`
+- dxc（隨 Vulkan SDK）
+
+Windows 的 `run.bat` 會呼叫 `run.ps1` 執行主要流程，並使用 `-ExecutionPolicy Bypass`，因此不受你本機 PowerShell profile 的執行政策影響。
+
+### 手動指定 SDK（可選）
+
+macOS：
 
 ```bash
 export VULKAN_SDK="$HOME/VulkanSDK/<version>/macOS"
 ```
 
-### 建置
+Windows：
 
-```bash
-./build.sh           # Release 模式
-./build.sh debug     # Debug 模式（含 validation layers）
+```powershell
+$env:VULKAN_SDK="C:\VulkanSDK\<version>"
 ```
-
-### 執行
-
-```bash
-./run.sh
-```
-
-`run.sh` 會自動設定 MoltenVK 所需的環境變數後啟動程式。
 
 ## 專案結構
 
@@ -86,7 +111,9 @@ export VULKAN_SDK="$HOME/VulkanSDK/<version>/macOS"
 │   ├── shader.frag.hlsl      # Fragment shader (HLSL)
 │   └── compile.sh            # Shader 編譯腳本
 ├── build.sh                  # 建置腳本
-├── run.sh                    # 執行腳本（含環境變數設定）
+├── run.sh                    # macOS 一鍵建置+執行入口
+├── run.bat                   # Windows 一鍵建置+執行入口
+├── run.ps1                   # Windows 主要執行邏輯（clang-only）
 └── DEVLOG.md                 # 開發筆記
 ```
 

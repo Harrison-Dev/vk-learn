@@ -2,7 +2,27 @@
 
 #include <iostream>
 #include <fstream>
+#include <cstring>
 #include <vulkan/vk_enum_string_helper.h>
+
+static bool hasInstanceExtension(const char *extensionName)
+{
+    uint32_t extensionCount = 0;
+    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+
+    std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
+
+    for (const auto &extension : availableExtensions)
+    {
+        if (strcmp(extension.extensionName, extensionName) == 0)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 // Forward declarations
 void DestroyDebugUtilsMessengerEXT(VkInstance instance,
@@ -190,7 +210,10 @@ void HelloTriangleApplication::createInstance()
     createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
     createInfo.ppEnabledExtensionNames = extensions.data();
 
-    createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+    if (hasInstanceExtension(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME))
+    {
+        createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+    }
 
     // debug infos
     VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
@@ -226,8 +249,11 @@ std::vector<const char *> HelloTriangleApplication::getRequiredExtensions()
 
     std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
-    // macOS 需要的 extension
-    extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+    // MoltenVK 等 portability driver 需要這個 extension；其他平台通常不需要
+    if (hasInstanceExtension(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME))
+    {
+        extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+    }
 
     if (enableValidationLayer)
     {
