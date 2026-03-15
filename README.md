@@ -83,7 +83,14 @@ cd shaders && ./compile.sh
 - vcpkg 安裝 GLFW：`C:\vcpkg\vcpkg.exe install glfw3:x64-windows`
 - dxc（隨 Vulkan SDK）
 
-Windows 的 `run.bat` 會呼叫 `run.ps1` 執行主要流程，並使用 `-ExecutionPolicy Bypass`，因此不受你本機 PowerShell profile 的執行政策影響。
+Windows 的 `run.bat` 會呼叫 `run.ps1` 執行主要流程，並使用 `-ExecutionPolicy Bypass`，因此不受你本機 PowerShell profile 的執行政策影響。請注意，`-ExecutionPolicy Bypass` 可能違反部分組織或系統的安全政策，如有疑慮請先確認你的環境規範。
+
+若你的環境不允許使用 `-ExecutionPolicy Bypass`，可以改用下列方式，在目前 PowerShell 工作階段暫時放寬執行原則後直接執行 `run.ps1`：
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+.\run.ps1
+```
 
 ### 手動指定 SDK（可選）
 
