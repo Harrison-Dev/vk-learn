@@ -8,10 +8,20 @@
 static bool hasInstanceExtension(const char *extensionName)
 {
     uint32_t extensionCount = 0;
-    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+    VkResult result = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+    if (result != VK_SUCCESS)
+    {
+        // Failed to enumerate instance extension properties; conservatively report not available.
+        return false;
+    }
 
     std::vector<VkExtensionProperties> availableExtensions(extensionCount);
-    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
+    result = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
+    if (result != VK_SUCCESS)
+    {
+        // Failed to retrieve instance extension details; conservatively report not available.
+        return false;
+    }
 
     for (const auto &extension : availableExtensions)
     {
