@@ -1030,7 +1030,7 @@ VkExtent2D HelloTriangleApplication::chooseSwapExtent(const VkSurfaceCapabilitie
     // ======== 情況一：視窗管理器已經幫我們決定好解析度 ========
     // 如果 currentExtent.width 不是 uint32_t 的最大值，
     // 代表視窗管理器已經指定了確切的解析度，直接用就好
-    if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
+    if (capabilities.currentExtent.width != UINT32_MAX)
     {
         return capabilities.currentExtent;
     }
